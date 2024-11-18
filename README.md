@@ -12,7 +12,7 @@ This package may eventually merge with similar efforts such as [SmallCollections
 ## Usage
 
 ```
-struct ShortVector{N,T} <: DenseVector{T,1}
+struct ShortVector{N,T} <: DenseVector{T}
 ```
 Immutable vector with local storage for up to `N` elements of type `T`.  If there are more
 than `N` elements they are stored on the heap.  For best performance `N` should be large enough to accommodate the majority of likely vectors, but smaller than the size at which tuples yield poor performance (say, 10). 
