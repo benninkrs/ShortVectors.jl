@@ -1,58 +1,7 @@
 module ShortVectors
 
 export VarNTuple, ShortVector
-import Base: length, size, axes, iterate, getindex, show
-
-
-
-"""
-   static_iter_state(f, s0, Val(n))
-Computes a stateful iteration statically (by manually unrolling).  Similar to `static_iter`,
-but for cases in which the iteration state is distinct from the value to be returned.
-Equivalent to:
-   (_, s1) = f(1, s0)
-   (_, s2) = f(2, s1)
-   ...
-   (v, sn) = f(n, s(n-1))
-   return v
-"""
-
-@inline function static_iter_state(g, ::Val{N}) where N
-	@assert N::Integer > 0
-	if @generated
-	   quote
-		  (value_1, state_0) = iterate(g)
-		  Base.Cartesian.@nexprs $N i -> (value_{i}, state_{i}) = iterate(g, state_{i-1})
-		  return $(Symbol(:value_, N))
-	   end
-	else
-	   (value, state) = iterate(g)
-	   for _ in 2:N
-		  (value, state) = iterate(g, state)
-	   end
-	   return value
-	end
- end
- 
-
-# """
-# 	tuple_iter(iter, Val(n))
-# Construct a tuple from an iterable object.
-# """
-# function tuple_iter(iter, ::Val{n}) where {n}
-# 	# wrapper function that can be called n times but stops iterating after i iterations
-
-
-# 	f = static_iter_state((j,s) -> j,s
-# 		(j < i) ? iterfun(j,s) : (iterfun(i,s)[1], s), s0, Val(n)) do    # slower if s is type unstable
-# 	 end
-
-# 	f = i -> static_iter_state(s0, Val(n)) do j,s
-# 		  (j < i) ? iterfun(j,s) : (iterfun(i,s)[1], s)   # slower if s is type unstable
-# 	   end
-# 	ntuple(f, Val(n))
-#  end
- 
+import Base: length, size, axes, iterate, getindex, iterate, show, display
 
 
 
@@ -87,17 +36,22 @@ end
 @inline size(t::VarNTuple) = (t.len,)
 @inline axes(t::VarNTuple) = Base.OneTo(length(t))
 
-@inline iterate(t::VarNTuple) = (1,2)
-@inline iterate(t::VarNTuple, i) = (i,i+1)
+@inline iterate(t::VarNTuple) = (length(t) > 0) ? (t[1],2) : nothing
+@inline iterate(t::VarNTuple, i) = (i <= length(t)) ? (t[i],i+1) : nothing
 
 
 @inline function getindex(t::VarNTuple, i)
 	# @boundscheck (1 <= i <= length(t)) || Base.throw_boundserror(t, i)
-	@boundscheck checkbounds(t.tup, i)
+	@boundscheck 1 <= i <= length(t) || throw(BoundsError(t, i))
 	@inbounds t.tup[i]
 end
 
-show(io::IO, t::VarNTuple) = show(io, t.tup)
+
+display(t::VarNTuple) = show(t)
+
+function show(io::IO, t::VarNTuple) 
+	Base.show_delim_array(io, t.tup, '(', ',', ")", true, 1, t.len)
+end
  
 
 
@@ -109,16 +63,15 @@ Immutable vector that is stored locally if it has length ≤ N, otherwise is sto
 This provides significantly improved performance when a small capacity `N` is sufficient
 for most instances, yet allows for larger instances when the need arises. 
 """
-struct ShortVector{N, T}
+struct ShortVector{N, T} <: DenseVector{T}
 	data::Union{VarNTuple{N, T}, Vector{T}}
 	@inline function ShortVector{N,T}(a) where {N,T}
 		if length(a) <= N
 			# new{N,T}(VarNTuple{N,T}(a))
-
 			# Doing the tuple-generation here (instead of in VarNTuple) avoids allocation for range/generator inputs
 			pad_a = @inbounds i -> i<=length(a) ? a[i] : zero(eltype(a))
 			t = ntuple(pad_a, Val(N))
-			new{N,T}(VarNTuple{N,T}(t,N))
+			new{N,T}(VarNTuple{N,T}(t,length(a)))
 		else
 			new{N,T}(collect(a))
 		end
@@ -131,12 +84,14 @@ length(v::ShortVector) = length(v.data)
 size(v::ShortVector) = (v.len,)
 axes(v::ShortVector) = Base.OneTo(length(v))
 
+@inline iterate(v::ShortVector, args...) = iterate(v.data, args...)
 
 @inline function getindex(v::ShortVector, i)
 	@boundscheck (1 <= i <= length(v)) || Base.throw_boundserror(v, i)
 	@inbounds v.data[i]
 end
 
+display(v::ShortVector) = show(v)
 
 function show(io::IO, v::ShortVector)
 	Base.show_delim_array(io, v.data, '[', ',', "]ˢᵛ", false, 1, length(v))
