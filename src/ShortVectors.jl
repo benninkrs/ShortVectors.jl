@@ -40,12 +40,10 @@ end
 @inline iterate(t::VarNTuple, i) = (i <= length(t)) ? (t[i],i+1) : nothing
 
 
-@inline function getindex(t::VarNTuple, i)
-	# @boundscheck (1 <= i <= length(t)) || Base.throw_boundserror(t, i)
-	@boundscheck 1 <= i <= length(t) || throw(BoundsError(t, i))
-	@inbounds t.tup[i]
+@inline function getindex(t::VarNTuple, I)
+	@boundscheck all(1<=i<=length(t) for i in I) || throw(BoundsError(t, I))
+	@inbounds t.tup[I]
 end
-
 
 display(t::VarNTuple) = show(t)
 
@@ -86,10 +84,9 @@ axes(v::ShortVector) = Base.OneTo(length(v))
 
 @inline iterate(v::ShortVector, args...) = iterate(v.data, args...)
 
-@inline function getindex(v::ShortVector, i)
-	@boundscheck (1 <= i <= length(v)) || Base.throw_boundserror(v, i)
-	@inbounds v.data[i]
-end
+@inline getindex(v::ShortVector, i::Integer) = v.data[i]
+@inline getindex(v::ShortVector{N,T}, I) where {N,T} = ShortVector{N,T}(v.data[I])
+
 
 display(v::ShortVector) = show(v)
 

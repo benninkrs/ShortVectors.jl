@@ -1,4 +1,4 @@
 name = "ShortVectors"
 uuid = "5b78acf2-0719-4636-8335-2a4118eec227"
 authors = ["Ryan Bennink <benninkrs@ornl.gov>"]
-version = "0.1.0"
+version = "0.1.2"
