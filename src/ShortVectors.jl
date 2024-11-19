@@ -1,7 +1,7 @@
 module ShortVectors
 
 export VarNTuple, ShortVector
-import Base: length, size, axes, iterate, getindex, iterate, show, display
+import Base: length, size, axes, iterate, getindex, iterate, show, display, convert
 
 
 
@@ -110,6 +110,8 @@ end
 	return ShortVector{N, T}(a; kw...)
 end
 
+convert(::ShortVector{N}, a) where {N} = ShortVector{N}(a)
+convert(::ShortVector{N,T}, a) where {N,T} = ShortVector{N,T}(a)
 
  
 length(v::ShortVector) = length(v.data)
