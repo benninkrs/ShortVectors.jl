@@ -5,12 +5,30 @@ import Base: length, size, axes, iterate, getindex, iterate, show, display
 
 
 
+@inline function _padded_tuple(a, len, ::Type{T}, ::Val{N}; fillval = nothing) where {T,N}
+	if len == 0
+		# if the fillval (default or provided) is invalid, try zero(T)
+		(fillval isa T) || (fillval = zero(T))
+		ntuple(i->fillval, Val(N))
+		# ntuple(i->zero(T), Val(N))
+	else
+		# TODO: make this robust to non 1-based indexing
+		ntuple((@inbounds i -> convert(T, a[min(i,len)])), Val(N))
+	end
+end	
+
+
 # Variable-length NTuple
 """
 	VarNTuple{N,T}
 
-Variable-length `NTuple` with fixed memory layout.
-Stores up to `N` elements of type `T`.
+Variable-length `NTuple` with fixed memory layout.  Stores up to `N` elements of type `T`.
+
+	VarNTuple{N,T}(x; fillval = zero(T))
+	VarNTuple{N}(x; fillval = zero(T))
+
+Construct a VarNTuple from indexable collection `x`.  If `T` is omitted, it is taken to be `eltype(x)`.
+`fillval` is a dummy instance of type `T`, and is only needed in the case `x` is empty and `zero(T)` is undefined.
 """
 struct VarNTuple{N,T}
 	tup::NTuple{N,T}
@@ -21,16 +39,24 @@ struct VarNTuple{N,T}
 		new{N,T}(data,len)
 	end
 
-	@inline function VarNTuple{N,T}(a) where {N,T}
+	@inline function VarNTuple{N,T}(a; fillval = nothing) where {N,T}
 		len = length(a)
 		(len <= N) || throw(ArgumentError("Input length ($len) exceeds specificed capacity ($N)"))
-		pad_a = @inbounds i -> i<=len ? a[i] : zero(eltype(a))
-		data = ntuple(pad_a, Val(N))
-		new{N,T}(data,len)
+		new{N,T}(_padded_tuple(a, len, T, Val(N)))
 	end
 end
 
-@inline VarNTuple{N}(a) where {N} = VarNTuple{N, eltype(a)}(a)
+
+# Infer type from collection
+# @inline VarNTuple{N}(a; kw...) where {N} = VarNTuple{N, eltype(a)}(a; kw...)
+@inline function VarNTuple{N}(a; kw...) where {N} 
+	T = eltype(a)
+	if T === Union{}	# A Tuple of Union{} cannot be instantiated
+		T = Any
+	end
+	return VarNTuple{N, T}(a; kw...)
+end
+
 
 @inline length(t::VarNTuple) = t.len
 @inline size(t::VarNTuple) = (t.len,)
@@ -47,11 +73,10 @@ end
 
 display(t::VarNTuple) = show(t)
 
-function show(io::IO, t::VarNTuple) 
-	Base.show_delim_array(io, t.tup, '(', ',', ")", true, 1, t.len)
+function show(io::IO, t::VarNTuple)
+	Base.show_delim_array(io, t.tup[1:t.len], '(', ',', ')', true)
 end
  
-
 
 
 """
@@ -63,20 +88,29 @@ for most instances, yet allows for larger instances when the need arises.
 """
 struct ShortVector{N, T} <: DenseVector{T}
 	data::Union{VarNTuple{N, T}, Vector{T}}
-	@inline function ShortVector{N,T}(a) where {N,T}
-		if length(a) <= N
+	@inline function ShortVector{N,T}(a; fillval = nothing) where {N,T}
+		len = length(a)
+		if len <= N
 			# new{N,T}(VarNTuple{N,T}(a))
-			# Doing the tuple-generation here (instead of in VarNTuple) avoids allocation for range/generator inputs
-			pad_a = @inbounds i -> i<=length(a) ? a[i] : zero(eltype(a))
-			t = ntuple(pad_a, Val(N))
-			new{N,T}(VarNTuple{N,T}(t,length(a)))
+			# Creating the padded tuple here is inexplicable faster than doing it in VarNTuple
+			t = _padded_tuple(a, len, T, Val(N); fillval)
+			new{N,T}(VarNTuple{N,T}(t,len))
 		else
 			new{N,T}(collect(a))
 		end
 	end
 end
 
-ShortVector{N}(a) where {N} = ShortVector{N, eltype(a)}(a)
+# @inline ShortVector{N}(a) where {N} = ShortVector{N, eltype(a)}(a)
+@inline function ShortVector{N}(a; kw...) where {N}
+	T = eltype(a)
+	if T === Union{}	# A Tuple of Union{} cannot be instantiated
+		T = Any
+	end
+	return ShortVector{N, T}(a; kw...)
+end
+
+
  
 length(v::ShortVector) = length(v.data)
 size(v::ShortVector) = (v.len,)
