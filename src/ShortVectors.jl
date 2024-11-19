@@ -110,8 +110,8 @@ end
 	return ShortVector{N, T}(a; kw...)
 end
 
-convert(::ShortVector{N}, a) where {N} = ShortVector{N}(a)
-convert(::ShortVector{N,T}, a) where {N,T} = ShortVector{N,T}(a)
+convert(::Type{ShortVector{N}}, a) where {N} = ShortVector{N}(a)
+convert(::Type{ShortVector{N,T}}, a) where {N,T} = ShortVector{N,T}(a)
 
  
 length(v::ShortVector) = length(v.data)
