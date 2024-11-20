@@ -38,3 +38,7 @@ x[2]
 ## Under the Hood
 
 `ShortVector` is wrapper for what is essentially a `Union{NTuple{N,T}, Vector{T}}`.
+
+## Open Issues
+
+`ShortVector` is not performing as well as I had hoped; while its performance is better than `Vector` in some cases, it still triggers allocations sometimes.  There is some indication that the internal `Union` may not be inlined.  
